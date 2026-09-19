@@ -1,0 +1,21 @@
+{
+  "name": "ine-price-tracker-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "headed": "node run-headed.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
