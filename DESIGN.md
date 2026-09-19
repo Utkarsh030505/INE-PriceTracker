@@ -11,7 +11,32 @@ The INE Demo Store (`demo.inelabteamdev.com`) is a React SPA with significant an
 
 HTTP scraping (fetch + Cheerio) was evaluated first but is not viable because price and stock data are not present in any API response or server-rendered HTML. The HTML body is just `<div id="root"></div>` — all content is JavaScript-rendered.
 
-**Playwright** was chosen because it provides a real Chromium browser that passes all fingerprinting checks and can simulate the required mouse interactions to trigger the price reveal.
+**Playwright** was chosen because it provides a real Chromium browser capable of performing the browser interactions and rendering required by the storefront's challenge flow.
+
+## Product Search Index vs. Dynamic Price/Stock Scraping
+
+There is a strict architectural boundary between product search and price/stock tracking:
+
+1. **`backend/catalog.json` is strictly an offline search index**:
+   - Contains ONLY static product identity and discovery metadata: `id`, `slug`, `name`, `brand`, `category`, `sku`, `description`.
+   - Contains **ZERO price** and **ZERO stock** fields.
+   - Its sole purpose is to provide instant, deterministic, and rate-limit-free autocompletion when users search for a product to track in the UI.
+
+2. **Price and Stock are ALWAYS scraped live via Playwright**:
+   - The INE mock store deliberately protects price and stock behind browser fingerprinting challenges (canvas/WebGL, mouse dwell, layout obfuscation).
+   - Neither the INE catalog API nor `catalog.json` contain price or stock data.
+   - When a user tracks a product or clicks "Scrape Now" (or during the 2-hour cron job), the backend launches Playwright (`scrapeProduct()`), navigates to the live product URL, simulates the required mouse interactions, clicks "Reveal price", solves the challenge, and extracts the real-time price and stock from the DOM.
+   - All extracted price and stock data are saved exclusively to Supabase PostgreSQL (`tracked_products` and `price_history`).
+
+## Search Reliability
+
+The initial implementation queried the storefront's paginated catalog API during every search. During testing, this produced inconsistent results because the catalog endpoint returned randomized subsets and repeated requests could trigger HTTP 429 responses.
+
+The search implementation was changed to use a local catalog index containing the store's product metadata. This makes product discovery deterministic and avoids unnecessary requests to the storefront.
+
+The frontend also uses a 350ms debounce and request sequence tracking. If multiple searches are in flight, an older response cannot overwrite the result of a newer search.
+
+Search results are normalized, deduplicated, ranked by relevance, and given a deterministic ID-based tie-breaker.
 
 ## Retry Strategy
 
@@ -25,7 +50,7 @@ HTTP scraping (fetch + Cheerio) was evaluated first but is not viable because pr
 
 - **Page navigation**: 15-second timeout (accounts for slow server responses)
 - **Price reveal wait**: 15-second timeout (the store's challenge system can take several seconds)
-- **Total worst-case per product**: ~45 seconds (3 attempts × 15s each)
+- - **Total worst-case per product**: approximately 45–55 seconds depending on retry backoff and browser startup overhead.
 - Timeouts are generous to avoid false failures on slow connections
 
 ## Data Validation
@@ -105,3 +130,5 @@ External cron services like cron-job.org:
 
 ### How I corrected it
 [fill this in after reviewing the implementation]
+
+

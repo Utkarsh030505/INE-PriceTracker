@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { searchProducts, trackProduct } from '../api';
 import ProductCard from './ProductCard';
 
@@ -8,6 +8,44 @@ export default function SearchBar({ onProductTracked }) {
   const [loading, setLoading] = useState(false);
   const [tracking, setTracking] = useState(null);
   const timerRef = useRef(null);
+  const latestRequestIdRef = useRef(0);
+
+  const executeSearch = useCallback(async (searchQuery) => {
+    const trimmed = (searchQuery || '').trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    const requestId = ++latestRequestIdRef.current;
+    setLoading(true);
+
+    try {
+      const data = await searchProducts(trimmed);
+      // Discard stale responses if a newer search was initiated
+      if (requestId === latestRequestIdRef.current) {
+        // Deduplicate products by stable unique id
+        const seen = new Set();
+        const unique = [];
+        for (const item of (data || [])) {
+          if (item && item.id != null && !seen.has(item.id)) {
+            seen.add(item.id);
+            unique.push(item);
+          }
+        }
+        setResults(unique);
+      }
+    } catch {
+      if (requestId === latestRequestIdRef.current) {
+        setResults([]);
+      }
+    } finally {
+      if (requestId === latestRequestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   function handleChange(e) {
     const value = e.target.value;
@@ -15,21 +53,23 @@ export default function SearchBar({ onProductTracked }) {
 
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    if (value.trim().length < 2) {
+    const trimmed = value.trim();
+    if (trimmed.length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
-    timerRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await searchProducts(value.trim());
-        setResults(data);
-      } catch {
-        setResults([]);
-      }
-      setLoading(false);
-    }, 300);
+    // Sensible debounce: 350ms
+    timerRef.current = setTimeout(() => {
+      executeSearch(value);
+    }, 350);
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (timerRef.current) clearTimeout(timerRef.current);
+    executeSearch(query);
   }
 
   async function handleTrack(product) {
@@ -47,13 +87,15 @@ export default function SearchBar({ onProductTracked }) {
 
   return (
     <div className="relative mb-6">
-      <input
-        type="text"
-        placeholder="Search INE store products..."
-        value={query}
-        onChange={handleChange}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-      />
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Search INE store products..."
+          value={query}
+          onChange={handleChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+        />
+      </form>
       {loading && (
         <p className="text-xs text-gray-500 mt-1">Searching...</p>
       )}

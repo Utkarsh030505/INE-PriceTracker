@@ -1,10 +1,44 @@
 import { chromium } from 'playwright';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const STORE_BASE = 'https://demo.inelabteamdev.com';
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 1000;
 const NAV_TIMEOUT = 15000;
 const PRICE_TIMEOUT = 15000;
+
+// ============================================================================
+// SEARCH INDEX ONLY:
+// `catalog.json` is strictly an offline search index used for product discovery
+// (name, brand, category, slug, sku, url). It contains NO price or stock data.
+// All price and stock values MUST and DO come exclusively from live Playwright
+// browser execution in `scrapeProduct()`, which solves the store's anti-bot
+// challenge in real time.
+// ============================================================================
+let searchIndexCache = null;
+
+function loadSearchIndex() {
+  if (searchIndexCache && searchIndexCache.length > 0) return searchIndexCache;
+  try {
+    const indexPath = path.join(__dirname, 'catalog.json');
+    if (fs.existsSync(indexPath)) {
+      const data = fs.readFileSync(indexPath, 'utf8');
+      searchIndexCache = JSON.parse(data);
+      return searchIndexCache;
+    }
+  } catch (err) {
+    console.error('Error loading local search index (catalog.json):', err.message);
+  }
+  return null;
+}
+
+// Pre-load search index on startup
+loadSearchIndex();
 
 // --- Price & stock parsing (exported for testing) ---
 
@@ -54,44 +88,104 @@ export function parseStockText(text) {
   return 'unknown';
 }
 
-// --- Search products via INE catalog API (no Playwright needed) ---
+// --- Search products via cached catalog with deterministic ranking ---
 
 export async function searchProducts(query) {
-  if (!query || query.trim().length === 0) return [];
-  const q = query.toLowerCase().trim();
-  const matches = [];
-  const maxPages = 5;
-  const pageSize = 60;
+  if (!query || typeof query !== 'string') return [];
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
 
-  for (let page = 1; page <= maxPages && matches.length < 20; page++) {
-    const url = `${STORE_BASE}/api/catalog?page=${page}&pageSize=${pageSize}`;
-    const res = await fetch(url);
-    if (!res.ok) break;
-    const data = await res.json();
-    if (!data.items || data.items.length === 0) break;
+  // Ensure search index is loaded
+  let catalog = loadSearchIndex();
 
-    for (const item of data.items) {
-      if (
-        item.name.toLowerCase().includes(q) ||
-        item.brand.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q)
-      ) {
-        matches.push({
-          id: item.id,
-          name: item.name,
-          brand: item.brand,
-          category: item.category,
-          slug: item.slug,
-          url: `${STORE_BASE}/product/${item.id}`,
-        });
-        if (matches.length >= 20) break;
+  // If local catalog wasn't present, fetch from API gracefully with browser headers
+  if (!catalog || catalog.length === 0) {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Referer': `${STORE_BASE}/`
+    };
+    const map = new Map();
+    try {
+      const pages = Array.from({ length: 17 }, (_, i) => i + 1);
+      const results = await Promise.allSettled(
+        pages.map(async p => {
+          const res = await fetch(`${STORE_BASE}/api/catalog?page=${p}&pageSize=60`, { headers });
+          if (!res.ok) return [];
+          const data = await res.json();
+          return data.items || [];
+        })
+      );
+      for (const res of results) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          for (const item of res.value) {
+            map.set(item.id, item);
+          }
+        }
       }
+      if (map.size > 0) {
+        catalog = Array.from(map.values()).sort((a, b) => a.id - b.id);
+        catalogCache = catalog;
+      }
+    } catch (err) {
+      console.warn('Catalog live fetch warning:', err.message);
     }
-
-    if (data.page >= data.pages) break;
   }
 
-  return matches;
+  if (!catalog || catalog.length === 0) return [];
+
+  // Score and rank matches for high quality, deterministic search results
+  const matches = [];
+  const seenIds = new Set();
+
+  for (const item of catalog) {
+    if (seenIds.has(item.id)) continue;
+
+    const name = (item.name || '').toLowerCase();
+    const brand = (item.brand || '').toLowerCase();
+    const category = (item.category || '').toLowerCase();
+    const sku = (item.sku || '').toLowerCase();
+
+    let score = 0;
+
+    if (name === q) {
+      score = 100;
+    } else if (name.startsWith(q)) {
+      score = 80;
+    } else if (name.includes(q)) {
+      score = 60;
+    } else if (brand === q) {
+      score = 50;
+    } else if (brand.startsWith(q)) {
+      score = 40;
+    } else if (brand.includes(q)) {
+      score = 30;
+    } else if (category.includes(q) || sku.includes(q)) {
+      score = 20;
+    }
+
+    if (score > 0) {
+      seenIds.add(item.id);
+      matches.push({
+        score,
+        id: item.id,
+        name: item.name,
+        brand: item.brand,
+        category: item.category,
+        slug: item.slug,
+        url: `${STORE_BASE}/product/${item.id}`,
+      });
+    }
+  }
+
+  // Deterministic sorting: higher score first, then ascending by stable id
+  matches.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.id - b.id;
+  });
+
+  // Return top 20 clean items
+  return matches.slice(0, 20).map(({ score, ...item }) => item);
 }
 
 // --- Scrape a single product page using Playwright ---
