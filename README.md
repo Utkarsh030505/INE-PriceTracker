@@ -125,7 +125,7 @@ cd ..
 Copy `.env.example` to `backend/.env` and fill in your Supabase credentials:
 ```env
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
+SUPABASE_PUBLISHABLE_KEY=your-publishable
 CRON_SECRET=your-chosen-cron-secret
 FRONTEND_URL=http://localhost:5173
 PORT=3001
@@ -178,39 +178,8 @@ The INE mock store's `/api/catalog` endpoint returns a randomly shuffled sample 
 8. **Retry Logic**: Up to 3 attempts with exponential backoff (1s, 2s, 4s).
 9. **Data Preservation**: If all attempts fail, `last_scrape_status` is marked `'failed'`, but existing valid `current_price` and `current_stock` are **never overwritten with null**.
 
----
 
-## 9. Headed Scraper Demo
-
-For the required 2–4 minute video recording:
-
-```bash
-cd backend
-
-# Successful scrape demonstration:
-node run-headed.js https://demo.inelabteamdev.com/product/1
-
-# Failure and retry demonstration (using an invalid product ID):
-node run-headed.js https://demo.inelabteamdev.com/product/999999
-```
-
-The terminal outputs formatted, real-time status messages:
-```
-SCRAPE STARTED
-Target: https://demo.inelabteamdev.com/product/1
-
-Attempt 1
-Requesting page...
-Waiting for content...
-Price found: ₹10797
-Stock found: out of stock
-Validation successful
-Saved successfully
-```
-
----
-
-## 10. External Cron Setup (Every 2 Hours)
+## 9. External Cron Setup (Every 2 Hours)
 
 1. Register or log in at [cron-job.org](https://cron-job.org).
 2. Create a new cron job with the following parameters:
@@ -223,7 +192,7 @@ Saved successfully
 
 ---
 
-## 11. Automated Testing
+## 10. Automated Testing
 
 Run the test suite in `backend/`:
 ```bash
@@ -231,16 +200,7 @@ cd backend
 npm test
 ```
 
-### Coverage (28/28 tests passing):
-- **Price Extraction**: Standard INR, Euro comma-decimal, Lakh notation, fullwidth unicode, trailing notes, decimal cents.
-- **Stock Extraction**: All 5 dynamic store badge phrasing formats, out of stock, unknown fallback.
-- **Validation**: Rejection of null, empty, non-numeric, zero, negative, and symbol-only values.
-- **Retry Handling**: Simulated timeout retries and HTTP 503 retries.
-- **Failure Handling**: Final status marking and data preservation rule verification.
-
----
-
-## 12. Deployment
+## 11. Deployment
 
 ### Frontend $\to$ Vercel
 - **Framework Preset**: Vite
@@ -262,7 +222,7 @@ npm test
 
 ---
 
-## 13. Known Limitations
+## 12. Known Limitations
 
 - **Pre-Indexed Catalog**: The search index contains the 1,000 mock store products discovered during project setup. Newly created products on the target store (if any are added dynamically) will not appear in search until indexed, although direct URLs can always be tracked.
 - **Sequential Scraping**: Bulk cron scraping operates sequentially to prevent triggering anti-bot rate limits on the target mock store.

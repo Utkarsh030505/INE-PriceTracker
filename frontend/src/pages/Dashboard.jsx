@@ -113,6 +113,19 @@ export default function Dashboard() {
     return list;
   }, [products, sortOption]);
 
+  const handleProductTracked = useCallback((newProduct) => {
+    if (newProduct && (newProduct.id || newProduct.product_url)) {
+      setProducts((prev) => {
+        const filtered = prev.filter(
+          (p) => p.id !== newProduct.id && p.product_url !== newProduct.product_url
+        );
+        return [newProduct, ...filtered];
+      });
+    }
+    // Background fetchProducts(true) synchronizes stats, alerts, and products from backend
+    fetchProducts(true);
+  }, [fetchProducts]);
+
   return (
     <div>
       {/* 1. Hero / Page Introduction matching reference */}
@@ -137,7 +150,7 @@ export default function Dashboard() {
       </section>
 
       {/* 2. Search Bar Area */}
-      <SearchBar onProductTracked={fetchProducts} trackedProducts={products} />
+      <SearchBar onProductTracked={handleProductTracked} trackedProducts={products} />
 
       {/* 3. Tracked Products — Exact match to reference layout */}
       <section id="tracked-section" className="mb-12">

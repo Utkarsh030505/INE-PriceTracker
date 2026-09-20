@@ -20,7 +20,16 @@ function timeAgo(date) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-function StockStatus({ stock }) {
+function StockStatus({ stock, status }) {
+  if (status === 'failed' && !stock) {
+    return (
+      <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0"></span>
+        <span className="truncate">Scrape Failed</span>
+      </div>
+    );
+  }
+
   if (!stock || stock === 'unknown') {
     return (
       <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-[#DCFCE7] text-[#15803D]">
@@ -68,27 +77,47 @@ function StockStatus({ stock }) {
 }
 
 function HealthDot({ status }) {
-  let color = 'bg-[#9CA3AF]';
-  let label = 'Healthy';
+  const isRetrying = status === 'retrying';
+  const isFailed = status === 'failed';
 
-  if (status === 'success') {
-    color = 'bg-[#9CA3AF]';
-    label = 'Healthy';
-  } else if (status === 'retrying') {
-    color = 'bg-[#F59E0B] animate-pulse';
-    label = 'Retrying';
-  } else if (status === 'failed') {
-    color = 'bg-[#EF4444]';
-    label = 'Failed';
+  if (isFailed) {
+    return (
+      <span
+        className="p-1 rounded-md text-[#EF4444] hover:bg-rose-50 transition-colors cursor-help inline-flex items-center justify-center"
+        title="Scraper Health: Failed"
+        aria-label="Scraper Health: Failed"
+      >
+        <svg className="w-4 h-4 text-[#EF4444]" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </span>
+    );
   }
 
+  if (isRetrying) {
+    return (
+      <span
+        className="p-1 rounded-md text-[#F59E0B] hover:bg-amber-50 transition-colors cursor-help inline-flex items-center justify-center"
+        title="Scraper Health: Retrying"
+        aria-label="Scraper Health: Retrying"
+      >
+        <svg className="w-4 h-4 text-[#F59E0B] animate-pulse" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
+      </span>
+    );
+  }
+
+  // Healthy (Operational)
   return (
     <span
-      className="inline-flex items-center justify-center cursor-help px-0.5"
-      title={`Scraper: ${label}`}
-      aria-label={`Scraper: ${label}`}
+      className="p-1 rounded-md text-[#16A34A] hover:bg-emerald-50 transition-colors cursor-help inline-flex items-center justify-center"
+      title="Scraper Health: Healthy (Operational)"
+      aria-label="Scraper Health: Healthy (Operational)"
     >
-      <span className={`w-2 h-2 rounded-full ${color}`}></span>
+      <svg className="w-4 h-4 text-[#16A34A]" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
     </span>
   );
 }
@@ -257,7 +286,7 @@ export default function TrackedProduct({ product, onRefresh }) {
   const isPriceIncrease = previousPrice != null && currentPrice != null && previousPrice < currentPrice;
 
   // 3. Price unchanged or baseline
-  const isPriceUnchanged = !isPriceDrop && !isPriceIncrease;
+  const isPriceUnchanged = currentPrice != null && !isPriceDrop && !isPriceIncrease;
 
   const syncLabel = product.scrape_interval_minutes < 60
     ? `${product.scrape_interval_minutes}m sync`
@@ -270,27 +299,27 @@ export default function TrackedProduct({ product, onRefresh }) {
         {/* Header Row: Stock Status + Action Controls */}
         <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
           <div className="min-w-0 flex-shrink">
-            <StockStatus stock={product.current_stock} />
+            <StockStatus stock={product.current_stock} status={product.last_scrape_status} />
           </div>
 
-          <div className="flex items-center gap-2.5 text-[#9CA3AF] flex-shrink-0">
+          <div className="flex items-center gap-1.5 text-[#111827] flex-shrink-0">
             <HealthDot status={product.last_scrape_status} />
 
             <button
               type="button"
               onClick={handleScrape}
               disabled={scraping}
-              className="p-1 rounded text-[#9CA3AF] hover:text-[#111827] transition-colors disabled:opacity-50"
+              className="p-1 rounded-md text-[#111827] hover:text-[#0A21C0] hover:bg-slate-100 transition-colors disabled:opacity-50"
               title={scraping ? 'Scraping live store...' : 'Scrape now'}
               aria-label={scraping ? 'Scraping live store' : 'Scrape now'}
             >
               {scraping ? (
                 <svg className="animate-spin w-4 h-4 text-[#0A21C0]" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
               ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.2" stroke="currentColor">
+                <svg className="w-4 h-4 text-[#111827]" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>
               )}
@@ -300,11 +329,11 @@ export default function TrackedProduct({ product, onRefresh }) {
               type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="p-1 rounded text-[#9CA3AF] hover:text-[#EF4444] transition-colors disabled:opacity-50"
+              className="p-1 rounded-md text-[#111827] hover:text-[#EF4444] hover:bg-slate-100 transition-colors disabled:opacity-50"
               title="Untrack product"
               aria-label="Untrack product"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+              <svg className="w-4 h-4 text-[#111827]" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
               </svg>
             </button>
@@ -348,8 +377,19 @@ export default function TrackedProduct({ product, onRefresh }) {
 
       {/* Bottom Section: Stacked Price + CTA */}
       <div className="mt-auto">
-        {/* Deal State 1: Genuine Price Drop */}
-        {isPriceDrop && (
+        {/* Deal State 0: Price Unavailable or Initial Scrape Failed */}
+        {currentPrice == null ? (
+          <div className="mb-5">
+            <div className="text-2xl font-extrabold text-[#6B7280] tracking-tight leading-tight">
+              Price unavailable
+            </div>
+            <div className="text-xs text-[#EF4444] font-medium mt-1">
+              {product.last_scrape_status === 'failed'
+                ? 'Scrape failed — click reload icon above to retry'
+                : 'Scrape pending'}
+            </div>
+          </div>
+        ) : isPriceDrop ? (
           <div className="mb-5">
             <div className="mb-1">
               <span className="inline-block bg-[#FEE2E2] text-[#EF4444] font-bold text-xs px-2.5 py-0.5 rounded-md">
@@ -363,10 +403,7 @@ export default function TrackedProduct({ product, onRefresh }) {
               {formatPrice(previousPrice)}
             </div>
           </div>
-        )}
-
-        {/* Deal State 2: Price Increased */}
-        {isPriceIncrease && (
+        ) : isPriceIncrease ? (
           <div className="mb-5">
             <div className="text-[32px] font-black text-[#16A34A] tracking-tight leading-tight">
               {formatPrice(currentPrice)}
@@ -375,10 +412,7 @@ export default function TrackedProduct({ product, onRefresh }) {
               Was: <span className="line-through">{formatPrice(previousPrice)}</span>
             </div>
           </div>
-        )}
-
-        {/* Deal State 3: Price Unchanged or Baseline */}
-        {isPriceUnchanged && (
+        ) : (
           <div className="mb-5">
             <div className="text-[32px] font-black text-[#16A34A] tracking-tight leading-tight">
               {formatPrice(currentPrice)}

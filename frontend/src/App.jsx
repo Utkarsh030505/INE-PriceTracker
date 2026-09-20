@@ -77,8 +77,8 @@ export default function App() {
             </div>
           </Link>
 
-          {/* Navigation & User Profile */}
-          <div className="flex items-center gap-6 sm:gap-8">
+          {/* Navigation */}
+          <div className="flex items-center">
             <nav className="hidden md:flex items-center gap-6 text-sm font-semibold h-20">
               <Link
                 to="/"
@@ -100,29 +100,7 @@ export default function App() {
               >
                 Alerts
               </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('stats-section')}
-                className="text-[#6B7280] hover:text-[#111827] transition-colors"
-              >
-                Logs
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('tracked-section')}
-                className="text-[#6B7280] hover:text-[#111827] transition-colors"
-              >
-                Settings
-              </button>
             </nav>
-
-            {/* User Avatar */}
-            <div
-              className="w-10 h-10 rounded-full bg-[#E5E7EB] text-[#4B5563] font-bold flex items-center justify-center text-sm shadow-xs cursor-default flex-shrink-0"
-              title="User Account: Utkarsh"
-            >
-              U
-            </div>
           </div>
         </div>
       </header>

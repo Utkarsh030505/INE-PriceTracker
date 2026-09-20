@@ -1,4 +1,4 @@
-export default function ProductCard({ product, onTrack, tracking, isTracked }) {
+export default function ProductCard({ product, onTrack, tracking, isTracked, isAnyTracking }) {
   return (
     <div className="group bg-white border border-[#E5E7EB] hover:border-[#0A21C0]/50 rounded-2xl p-4 transition-all duration-150 hover:shadow-md flex flex-col justify-between h-full shadow-2xs">
       {/* Top Meta */}
@@ -56,7 +56,7 @@ export default function ProductCard({ product, onTrack, tracking, isTracked }) {
           <button
             type="button"
             onClick={onTrack}
-            disabled={tracking}
+            disabled={tracking || isAnyTracking}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[#0A21C0] hover:bg-[#1E3DE6] text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors focus-visible:outline-none"
           >
             {tracking ? (
@@ -65,7 +65,7 @@ export default function ProductCard({ product, onTrack, tracking, isTracked }) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
-                <span>Tracking...</span>
+                <span>Fetching price...</span>
               </>
             ) : (
               <>

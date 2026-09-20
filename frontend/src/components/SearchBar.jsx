@@ -126,14 +126,17 @@ export default function SearchBar({ onProductTracked, trackedProducts = [] }) {
   }
 
   async function handleTrack(product) {
+    if (tracking) return;
     setTracking(product.id);
     try {
-      await trackProduct(product.name, product.url);
-      onProductTracked?.();
+      const res = await trackProduct(product.name, product.url);
+      const trackedProd = res?.product || res;
+      onProductTracked?.(trackedProd);
     } catch (err) {
       alert('Failed to track product: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setTracking(null);
     }
-    setTracking(null);
   }
 
   const displayedResults = useMemo(() => {
@@ -337,6 +340,7 @@ export default function SearchBar({ onProductTracked, trackedProducts = [] }) {
                 product={product}
                 onTrack={() => handleTrack(product)}
                 tracking={tracking === product.id}
+                isAnyTracking={Boolean(tracking)}
                 isTracked={trackedUrls.has(product.url)}
               />
             ))}

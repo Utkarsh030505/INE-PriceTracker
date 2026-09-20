@@ -159,9 +159,16 @@ app.post('/api/products/track', async (req, res) => {
     console.error('-----------------------------------');
   }
 
-  if (existing) return res.json(formatTrackedProduct(existing));
+  if (existing) {
+    const formatted = formatTrackedProduct(existing);
+    return res.json({
+      success: true,
+      product: formatted,
+      ...formatted,
+    });
+  }
 
-  const { data, error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('tracked_products')
     .insert({ product_name, product_url })
     .select()
@@ -186,7 +193,45 @@ app.post('/api/products/track', async (req, res) => {
     });
   }
 
-  res.status(201).json(formatTrackedProduct(data));
+  // Await existing runScrapeForProduct for the newly tracked product
+  try {
+    await runScrapeForProduct(inserted);
+  } catch (scrapeErr) {
+    console.error('Initial scrape error for newly tracked product:', scrapeErr.message);
+    try {
+      await supabase
+        .from('tracked_products')
+        .update({
+          last_scraped_at: new Date().toISOString(),
+          last_scrape_status: 'failed',
+        })
+        .eq('id', inserted.id);
+      await supabase.from('scrape_logs').insert({
+        tracked_product_id: inserted.id,
+        attempt_number: 1,
+        status: 'failed',
+        error_message: scrapeErr.message,
+        duration_ms: 0,
+      });
+    } catch (logErr) {
+      console.error('Failed to log scrape failure:', logErr.message);
+    }
+  }
+
+  // Fetch updated product with price_history
+  const { data: updatedProduct } = await supabase
+    .from('tracked_products')
+    .select('*, price_history(price, scraped_at)')
+    .eq('id', inserted.id)
+    .single();
+
+  const finalProduct = formatTrackedProduct(updatedProduct || inserted);
+
+  res.status(201).json({
+    success: true,
+    product: finalProduct,
+    ...finalProduct,
+  });
 });
 
 app.get('/api/products/:id', async (req, res) => {
