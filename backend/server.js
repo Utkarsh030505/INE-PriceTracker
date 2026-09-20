@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import supabase from './supabase.js';
 import { searchProducts, scrapeTrackedProduct } from './scraper.js';
+import { processAlertsForProduct } from './services/alertsService.js';
+import { calculateNextScrapeAt, isProductDue, isValidInterval } from './services/schedulerService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -27,6 +29,56 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// --- Dashboard statistics ---
+
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const [productsRes, scrapeLogsTodayRes, failedLogsRes, alertsRes] = await Promise.all([
+      supabase.from('tracked_products').select('current_stock'),
+      supabase
+        .from('scrape_logs')
+        .select('id', { count: 'exact', head: true })
+        .gte('scraped_at', today.toISOString()),
+      supabase
+        .from('scrape_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'failed'),
+      supabase
+        .from('product_alerts')
+        .select('id', { count: 'exact', head: true })
+        .eq('alert_type', 'price_drop'),
+    ]);
+
+    const products = productsRes.data || [];
+    let inStock = 0;
+    let outOfStock = 0;
+
+    for (const p of products) {
+      const stock = (p.current_stock || '').toLowerCase();
+      if (stock.includes('out of stock')) {
+        outOfStock++;
+      } else if (stock.includes('in stock') || stock.includes('only') || stock.includes('left')) {
+        inStock++;
+      }
+    }
+
+    res.json({
+      totalTracked: products.length,
+      inStock,
+      outOfStock,
+      scrapesToday: scrapeLogsTodayRes.count ?? 0,
+      failedScrapes: failedLogsRes.count ?? 0,
+      priceDrops: alertsRes?.count ?? 0,
+    });
+  } catch (err) {
+    console.error('Dashboard stats error:', err.message);
+    res.status(500).json({ error: 'Failed to compute dashboard stats' });
+  }
+});
+
 // --- Search INE store products ---
 
 app.get('/api/products/search', async (req, res) => {
@@ -43,13 +95,25 @@ app.get('/api/products/search', async (req, res) => {
 
 // --- Tracked products ---
 
+function formatTrackedProduct(p) {
+  if (!p) return p;
+  return {
+    ...p,
+    scrape_interval_minutes: p.scrape_interval_minutes || 120,
+    next_scrape_at: p.next_scrape_at || null,
+    price_alert_enabled: p.price_alert_enabled ?? true,
+    stock_alert_enabled: p.stock_alert_enabled ?? true,
+    price_drop_threshold_pct: p.price_drop_threshold_pct ?? 0,
+  };
+}
+
 app.get('/api/products/tracked', async (req, res) => {
   const { data, error } = await supabase
     .from('tracked_products')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json((data || []).map(formatTrackedProduct));
 });
 
 app.post('/api/products/track', async (req, res) => {
@@ -80,7 +144,7 @@ app.post('/api/products/track', async (req, res) => {
     console.error('-----------------------------------');
   }
 
-  if (existing) return res.json(existing);
+  if (existing) return res.json(formatTrackedProduct(existing));
 
   const { data, error } = await supabase
     .from('tracked_products')
@@ -107,7 +171,7 @@ app.post('/api/products/track', async (req, res) => {
     });
   }
 
-  res.status(201).json(data);
+  res.status(201).json(formatTrackedProduct(data));
 });
 
 app.get('/api/products/:id', async (req, res) => {
@@ -117,7 +181,7 @@ app.get('/api/products/:id', async (req, res) => {
     .eq('id', req.params.id)
     .single();
   if (error) return res.status(404).json({ error: 'Product not found' });
-  res.json(data);
+  res.json(formatTrackedProduct(data));
 });
 
 app.delete('/api/products/:id', async (req, res) => {
@@ -171,8 +235,11 @@ async function runScrapeForProduct(product) {
     });
   }
 
+  // Calculate next scheduled scrape time based on configured interval
+  const nextScrapeAt = calculateNextScrapeAt(product.scrape_interval_minutes, new Date());
+
   if (result.success) {
-    // Update product with new price/stock
+    // Update product with new price/stock and next_scrape_at
     await supabase
       .from('tracked_products')
       .update({
@@ -180,6 +247,7 @@ async function runScrapeForProduct(product) {
         current_stock: result.stock,
         last_scraped_at: new Date().toISOString(),
         last_scrape_status: 'success',
+        next_scrape_at: nextScrapeAt,
       })
       .eq('id', product.id);
 
@@ -189,19 +257,135 @@ async function runScrapeForProduct(product) {
       price: result.price,
       stock_status: result.stock,
     });
+
+    // Process price-drop and back-in-stock alerts safely (never fails the scrape)
+    try {
+      await processAlertsForProduct(product, result.price, result.stock, supabase);
+    } catch (alertErr) {
+      console.error('[Alert] Error in scrape flow:', alertErr.message);
+    }
   } else {
-    // Failed: preserve current_price and current_stock, only update status
+    // Failed: preserve current_price and current_stock, update status and schedule future retry
     await supabase
       .from('tracked_products')
       .update({
         last_scraped_at: new Date().toISOString(),
         last_scrape_status: 'failed',
+        next_scrape_at: nextScrapeAt,
       })
       .eq('id', product.id);
   }
 
   return result;
 }
+
+// --- Frequency Configuration API ---
+
+app.patch('/api/products/:id/frequency', async (req, res) => {
+  try {
+    const { scrape_interval_minutes } = req.body;
+    const interval = Number(scrape_interval_minutes);
+    if (!isValidInterval(interval)) {
+      return res.status(400).json({
+        error: 'Invalid scrape interval. Supported values: 30, 60, 120, 360, 720, 1440 minutes.',
+      });
+    }
+
+    const next_scrape_at = calculateNextScrapeAt(interval, new Date());
+
+    const { data, error } = await supabase
+      .from('tracked_products')
+      .update({
+        scrape_interval_minutes: interval,
+        next_scrape_at,
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error('Update frequency error:', err.message);
+    res.status(500).json({ error: 'Failed to update frequency' });
+  }
+});
+
+// --- Alerts API ---
+
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('product_alerts')
+      .select('*, tracked_products(product_name, product_url)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      // Graceful fallback if join not available
+      const { data: fallbackData } = await supabase
+        .from('product_alerts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      return res.json(fallbackData || []);
+    }
+    res.json(data || []);
+  } catch (err) {
+    console.error('Fetch alerts error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+app.get('/api/products/:id/alerts', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('product_alerts')
+      .select('*')
+      .eq('tracked_product_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) return res.json([]);
+    res.json(data || []);
+  } catch (err) {
+    console.error('Fetch product alerts error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch product alerts' });
+  }
+});
+
+app.patch('/api/products/:id/alert-settings', async (req, res) => {
+  try {
+    const { price_alert_enabled, stock_alert_enabled, price_drop_threshold_pct } = req.body;
+    const updates = {};
+    if (typeof price_alert_enabled === 'boolean') updates.price_alert_enabled = price_alert_enabled;
+    if (typeof stock_alert_enabled === 'boolean') updates.stock_alert_enabled = stock_alert_enabled;
+    if (price_drop_threshold_pct !== undefined) {
+      const val = Number(price_drop_threshold_pct);
+      if (isNaN(val) || val < 0 || val > 100) {
+        return res.status(400).json({ error: 'Threshold must be between 0 and 100' });
+      }
+      updates.price_drop_threshold_pct = val;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid alert settings provided' });
+    }
+
+    const { data, error } = await supabase
+      .from('tracked_products')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    console.error('Update alert settings error:', err.message);
+    res.status(500).json({ error: 'Failed to update alert settings' });
+  }
+});
 
 app.post('/api/products/:id/scrape', async (req, res) => {
   try {
@@ -221,13 +405,20 @@ app.post('/api/products/:id/scrape', async (req, res) => {
   }
 });
 
-// --- Bulk scrape (cron endpoint) ---
+// --- Bulk scrape (cron endpoint — async fire-and-forget) ---
+
+let isScraping = false;
 
 app.post('/api/scrape/run', async (req, res) => {
   const rawAuth = req.headers['x-cron-secret'] || req.headers['authorization'];
   const secret = rawAuth ? rawAuth.replace(/^Bearer\s+/i, '').trim() : null;
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Prevent overlapping scrape batches
+  if (isScraping) {
+    return res.json({ success: true, status: 'already_running' });
   }
 
   try {
@@ -237,25 +428,65 @@ app.post('/api/scrape/run', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
     if (!products || products.length === 0) {
-      return res.json({ success: true, scraped: 0, failed: 0 });
+      return res.json({ success: true, status: 'no_products', scraped: 0, failed: 0 });
     }
 
-    let scraped = 0;
-    let failed = 0;
+    // Filter products that are currently due for scraping
+    const now = new Date();
+    const dueProducts = products.filter((p) => isProductDue(p, now));
 
-    // Scrape sequentially to avoid overwhelming the store
-    for (const product of products) {
+    if (dueProducts.length === 0) {
+      return res.json({
+        success: true,
+        status: 'no_products_due',
+        totalTracked: products.length,
+        due: 0,
+        scraped: 0,
+        failed: 0,
+      });
+    }
+
+    // Acquire lock BEFORE responding
+    isScraping = true;
+    const dueCount = dueProducts.length;
+
+    // Respond immediately — cron-job.org gets HTTP 200 in < 1 second
+    res.json({
+      success: true,
+      status: 'started',
+      due: dueCount,
+      totalTracked: products.length,
+    });
+
+    // Run the existing scrape batch in the background (fire-and-forget)
+    // This continues after the HTTP response has been sent
+    setImmediate(async () => {
+      let scraped = 0;
+      let failed = 0;
+      const startTime = Date.now();
+      console.log(`[Cron] Background scrape started for ${dueCount} due product(s) (out of ${products.length} tracked)`);
+
       try {
-        const result = await runScrapeForProduct(product);
-        if (result.success) scraped++;
-        else failed++;
-      } catch {
-        failed++;
+        // Scrape due products sequentially — unchanged scraper execution
+        for (const product of dueProducts) {
+          try {
+            const result = await runScrapeForProduct(product);
+            if (result.success) scraped++;
+            else failed++;
+          } catch {
+            failed++;
+          }
+        }
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[Cron] Background scrape finished: ${scraped} scraped, ${failed} failed (${elapsed}s)`);
+      } catch (err) {
+        console.error('[Cron] Unexpected background scrape error:', err.message);
+      } finally {
+        isScraping = false;
       }
-    }
-
-    res.json({ success: true, scraped, failed });
+    });
   } catch (err) {
+    isScraping = false;
     console.error('Bulk scrape error:', err.message);
     res.status(500).json({ error: 'Bulk scrape failed' });
   }

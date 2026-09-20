@@ -14,6 +14,11 @@ export async function getTrackedProducts() {
   return data;
 }
 
+export async function getDashboardStats() {
+  const { data } = await api.get('/api/dashboard/stats');
+  return data;
+}
+
 export async function trackProduct(productName, productUrl) {
   const { data } = await api.post('/api/products/track', {
     product_name: productName,
@@ -44,5 +49,25 @@ export async function scrapeProduct(id) {
 
 export async function deleteProduct(id) {
   const { data } = await api.delete(`/api/products/${id}`);
+  return data;
+}
+
+export async function getAlerts() {
+  const { data } = await api.get('/api/alerts');
+  return data;
+}
+
+export async function getProductAlerts(id) {
+  const { data } = await api.get(`/api/products/${id}/alerts`);
+  return data;
+}
+
+export async function updateAlertSettings(id, settings) {
+  const { data } = await api.patch(`/api/products/${id}/alert-settings`, settings);
+  return data;
+}
+
+export async function updateProductFrequency(id, intervalMinutes) {
+  const { data } = await api.patch(`/api/products/${id}/frequency`, { scrape_interval_minutes: intervalMinutes });
   return data;
 }
