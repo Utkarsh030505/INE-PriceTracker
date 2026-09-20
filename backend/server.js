@@ -97,8 +97,16 @@ app.get('/api/products/search', async (req, res) => {
 
 function formatTrackedProduct(p) {
   if (!p) return p;
+  let previous_price = null;
+  if (Array.isArray(p.price_history) && p.price_history.length > 1) {
+    const sorted = [...p.price_history].sort(
+      (a, b) => new Date(b.scraped_at) - new Date(a.scraped_at)
+    );
+    previous_price = sorted[1]?.price != null ? Number(sorted[1].price) : null;
+  }
   return {
     ...p,
+    previous_price: p.previous_price ?? previous_price,
     scrape_interval_minutes: p.scrape_interval_minutes || 120,
     next_scrape_at: p.next_scrape_at || null,
     price_alert_enabled: p.price_alert_enabled ?? true,
@@ -110,9 +118,16 @@ function formatTrackedProduct(p) {
 app.get('/api/products/tracked', async (req, res) => {
   const { data, error } = await supabase
     .from('tracked_products')
-    .select('*')
+    .select('*, price_history(price, scraped_at)')
     .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    const fallback = await supabase
+      .from('tracked_products')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (fallback.error) return res.status(500).json({ error: fallback.error.message });
+    return res.json((fallback.data || []).map(formatTrackedProduct));
+  }
   res.json((data || []).map(formatTrackedProduct));
 });
 
@@ -177,10 +192,18 @@ app.post('/api/products/track', async (req, res) => {
 app.get('/api/products/:id', async (req, res) => {
   const { data, error } = await supabase
     .from('tracked_products')
-    .select('*')
+    .select('*, price_history(price, scraped_at)')
     .eq('id', req.params.id)
     .single();
-  if (error) return res.status(404).json({ error: 'Product not found' });
+  if (error) {
+    const fallback = await supabase
+      .from('tracked_products')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (fallback.error) return res.status(404).json({ error: 'Product not found' });
+    return res.json(formatTrackedProduct(fallback.data));
+  }
   res.json(formatTrackedProduct(data));
 });
 

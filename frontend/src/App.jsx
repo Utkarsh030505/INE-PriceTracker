@@ -1,79 +1,154 @@
-import { Routes, Route, Link } from 'react-router-dom';
+import { Component } from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import ProductDetails from './pages/ProductDetails';
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-white border border-[#E5E7EB] rounded-3xl p-8 max-w-lg mx-auto text-center shadow-sm my-12">
+          <div className="w-12 h-12 rounded-full bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+            !
+          </div>
+          <h2 className="text-lg font-bold text-[#111827] mb-2">Something went wrong</h2>
+          <p className="text-xs text-[#6B7280] mb-4">
+            {this.state.error?.message || 'An unexpected rendering error occurred.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-[#0A21C0] hover:bg-[#1E3DE6] text-white text-xs font-bold rounded-xl transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  const location = useLocation();
+  const isDashboard = location.pathname === '/';
+
+  const scrollToSection = (id) => {
+    if (!isDashboard) return;
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50/50">
-      {/* Navbar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200/80">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+    <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-[#111827]">
+      {/* Navbar matching reference image */}
+      <header className="sticky top-0 z-40 bg-[#F8F9FA]/95 backdrop-blur-md border-b border-[#E5E7EB]">
+        <div className="max-w-[1200px] w-full mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="h-9 w-9 rounded-lg bg-zinc-900 text-white flex items-center justify-center shadow-sm group-hover:bg-zinc-800 transition-colors">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6H2.25m0 0H3m-3 0h1.5m0 0v9.75m0 0H2.25m.75 0h.75m0 0h16.5m0 0v-9.75m0 0h.75m-.75 0h-1.5m1.5 0H21m-18 0h18M3.75 4.5h16.5m0 0v-.75A.75.75 0 0019.5 3H4.5a.75.75 0 00-.75.75v.75m16.5 0H3.75" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9" />
+            <div className="h-11 w-11 rounded-xl bg-[#0B1120] text-white flex items-center justify-center shadow-sm group-hover:bg-[#141619] transition-colors flex-shrink-0">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <rect x="2" y="3" width="20" height="14" rx="2" strokeWidth="2" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4M6 12l3-3 3 3 5-5" strokeWidth="2" />
               </svg>
             </div>
             <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-zinc-900 text-base tracking-tight">INE Price Tracker</span>
-                <span className="hidden sm:inline-block text-[10px] font-medium tracking-wider uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 border border-zinc-200">
-                  Live Scraper
-                </span>
-              </div>
-              <span className="hidden sm:block text-xs text-zinc-500">Catalog Discovery & Anti-Bot Price Monitor</span>
+              <span className="font-extrabold text-[#111827] text-lg tracking-tight leading-tight">
+                INE Price Tracker
+              </span>
+              <span className="text-xs text-[#6B7280] font-medium">
+                Catalog Discovery &amp; Anti-Bot Price Monitor
+              </span>
             </div>
           </Link>
 
-          {/* Right Controls / Badges */}
-          <div className="flex items-center gap-3">
-            {/* Cron Status Badge */}
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-sm" title="Automated scraping triggered every 2 hours via cron-job.org">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>2h Cron Active</span>
-            </div>
+          {/* Navigation & User Profile */}
+          <div className="flex items-center gap-6 sm:gap-8">
+            <nav className="hidden md:flex items-center gap-6 text-sm font-semibold h-20">
+              <Link
+                to="/"
+                className={`relative flex items-center h-full transition-colors ${
+                  isDashboard
+                    ? 'text-[#0A21C0] font-bold'
+                    : 'text-[#6B7280] hover:text-[#111827]'
+                }`}
+              >
+                <span>Dashboard</span>
+                {isDashboard && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#0A21C0] rounded-t-full"></span>
+                )}
+              </Link>
+              <button
+                type="button"
+                onClick={() => scrollToSection('alerts-section')}
+                className="text-[#6B7280] hover:text-[#111827] transition-colors"
+              >
+                Alerts
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection('stats-section')}
+                className="text-[#6B7280] hover:text-[#111827] transition-colors"
+              >
+                Logs
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection('tracked-section')}
+                className="text-[#6B7280] hover:text-[#111827] transition-colors"
+              >
+                Settings
+              </button>
+            </nav>
 
-            {/* Mock Store Link */}
-            <a
-              href="https://demo.inelabteamdev.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-700 hover:text-zinc-900 bg-white hover:bg-zinc-100 border border-zinc-200 shadow-sm transition-colors"
+            {/* User Avatar */}
+            <div
+              className="w-10 h-10 rounded-full bg-[#E5E7EB] text-[#4B5563] font-bold flex items-center justify-center text-sm shadow-xs cursor-default flex-shrink-0"
+              title="User Account: Utkarsh"
             >
-              <span>Mock Store</span>
-              <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-              </svg>
-            </a>
+              U
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/product/:id" element={<ProductDetails />} />
-        </Routes>
+      <main className="flex-1 max-w-[1200px] w-full mx-auto px-4 sm:px-6 py-8">
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/product/:id" element={<ProductDetails />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 bg-white mt-auto py-6">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
+      <footer className="border-t border-[#E5E7EB] bg-[#F8F9FA] mt-auto py-6">
+        <div className="max-w-[1200px] w-full mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-zinc-700">INE Product Price Tracker</span>
+            <span className="font-semibold text-[#111827]">INE Product Price Tracker</span>
             <span>·</span>
             <span>Automated 2-Hour Cron</span>
             <span>·</span>
             <span>Playwright Anti-Bot Engine</span>
           </div>
-          <div className="text-zinc-400">
-            Deployed on Vercel & Render · Supabase PostgreSQL
+          <div className="text-[#6B7280]">
+            Deployed on Vercel &amp; Render · Supabase PostgreSQL
           </div>
         </div>
       </footer>

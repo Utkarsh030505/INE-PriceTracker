@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getTrackedProducts, getDashboardStats, getAlerts } from '../api';
 import SearchBar from '../components/SearchBar';
 import TrackedProduct from '../components/TrackedProduct';
@@ -76,8 +76,7 @@ export default function Dashboard() {
     };
   }, [fetchProducts]);
 
-  // Relative time ticker: re-renders every 60 seconds so "2m ago" -> "3m ago"
-  // updates automatically without requiring manual page refresh or network requests
+  // Relative time ticker: re-renders every 60 seconds
   const [, setTimerTick] = useState(0);
   useEffect(() => {
     const tickInterval = setInterval(() => {
@@ -94,189 +93,252 @@ export default function Dashboard() {
     setTimeout(() => setRefreshing(false), 400);
   }
 
+  const [sortOption, setSortOption] = useState('recently_updated');
+
+  const sortedProducts = useMemo(() => {
+    let list = [...products];
+    if (sortOption === 'recently_updated') {
+      list.sort((a, b) => new Date(b.last_scraped_at || b.updated_at || 0) - new Date(a.last_scraped_at || a.updated_at || 0));
+    } else if (sortOption === 'price_low') {
+      list.sort((a, b) => (Number(a.current_price) || 0) - (Number(b.current_price) || 0));
+    } else if (sortOption === 'price_high') {
+      list.sort((a, b) => (Number(b.current_price) || 0) - (Number(a.current_price) || 0));
+    } else if (sortOption === 'discount') {
+      list.sort((a, b) => {
+        const discA = a.previous_price && a.current_price ? (a.previous_price - a.current_price) / a.previous_price : 0;
+        const discB = b.previous_price && b.current_price ? (b.previous_price - b.current_price) / b.previous_price : 0;
+        return discB - discA;
+      });
+    }
+    return list;
+  }, [products, sortOption]);
+
   return (
     <div>
-      {/* Hero Header */}
-      <section className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-200 mb-2">
-              <svg className="w-3.5 h-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-              </svg>
-              <span>Catalog & Price Intelligence</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-              INE Product Price Tracker
-            </h1>
-            <p className="mt-1.5 text-sm sm:text-base text-zinc-500 max-w-2xl">
-              Search the 1,000-item store catalog, track products in Supabase, and monitor live price and stock movements via automated Playwright scraping.
-            </p>
-          </div>
-
-          {/* Quick Schedule Badge */}
-          <div className="bg-white border border-zinc-200 rounded-xl px-4 py-2.5 shadow-2xs">
-            <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Default Schedule</span>
-            <span className="text-sm font-semibold text-emerald-600">Every 2 Hours</span>
-          </div>
+      {/* 1. Hero / Page Introduction matching reference */}
+      <section className="mb-6 pt-2 sm:pt-4">
+        {/* Eyebrow Pill */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wider bg-[#F3E8FF] text-[#9333EA] mb-3 shadow-2xs">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+          </svg>
+          <span>TRACK SMARTER</span>
         </div>
+
+        {/* Hero Title */}
+        <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-black tracking-tight text-[#111827] leading-tight">
+          Track Prices. Find Better Deals.
+        </h1>
+
+        {/* Hero Subtitle */}
+        <p className="mt-2 text-sm sm:text-base text-[#6B7280] max-w-2xl leading-relaxed">
+          Search the 1,000-item store catalog, track products, and monitor live price and stock movements via automated Playwright scraping.
+        </p>
       </section>
 
-      {/* Real Summary Metrics */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Total Tracked</span>
-          <span className="text-xl font-bold text-zinc-900 mt-1 block">{loading ? '—' : stats.totalTracked}</span>
-        </div>
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">In Stock</span>
-          <span className="text-xl font-bold text-emerald-600 mt-1 block">{loading ? '—' : stats.inStock}</span>
-        </div>
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Out of Stock</span>
-          <span className="text-xl font-bold text-rose-600 mt-1 block">{loading ? '—' : stats.outOfStock}</span>
-        </div>
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Scrapes Today</span>
-          <span className="text-xl font-bold text-zinc-900 mt-1 block">{loading ? '—' : stats.scrapesToday}</span>
-        </div>
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Failed Scrapes</span>
-          <span className="text-xl font-bold text-amber-600 mt-1 block">{loading ? '—' : stats.failedScrapes}</span>
-        </div>
-        <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs">
-          <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Price Drops</span>
-          <span className="text-xl font-bold text-emerald-600 mt-1 block">{loading ? '—' : stats.priceDrops}</span>
-        </div>
-      </section>
-
-      {/* Search & Discovery Area */}
+      {/* 2. Search Bar Area */}
       <SearchBar onProductTracked={fetchProducts} trackedProducts={products} />
 
-      {/* Tracked Products Inventory */}
-      <section className="bg-white border border-zinc-200 rounded-2xl shadow-xs overflow-hidden">
+      {/* 3. Tracked Products — Exact match to reference layout */}
+      <section id="tracked-section" className="mb-12">
         {/* Section Header */}
-        <div className="px-5 py-4 border-b border-zinc-200/80 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-semibold text-zinc-900">Monitored Products</h2>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
-              {products.length}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[#111827]">
+              Tracked Products
+            </h2>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E5E7EB] text-[#4B5563]">
+              {products.length} {products.length === 1 ? 'product' : 'products'}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={refreshing || loading}
-            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors disabled:opacity-50"
-            title="Refresh tracked products list"
-          >
-            <svg
-              className={`w-3.5 h-3.5 text-zinc-400 ${refreshing ? 'animate-spin' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#6B7280]">Sort by</span>
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value)}
+                className="bg-white border border-[#E5E7EB] text-[#111827] rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-[#0A21C0] shadow-xs cursor-pointer"
+              >
+                <option value="recently_updated">Recently Updated</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+                <option value="discount">Biggest Discount</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={refreshing || loading}
+              className="p-1.5 rounded-lg bg-white border border-[#E5E7EB] text-[#6B7280] hover:text-[#0A21C0] transition-colors disabled:opacity-50 shadow-xs"
+              title="Refresh all tracked products"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-            </svg>
-            <span>Refresh</span>
-          </button>
+              <svg
+                className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#0A21C0]' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="2.2"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Loading State */}
+        {/* Loading State: 3-Column Light Card Skeletons */}
         {loading && (
-          <div className="p-6 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-zinc-100 rounded-lg animate-pulse"></div>
+              <div
+                key={i}
+                className="bg-white border border-[#E5E7EB] rounded-3xl p-6 sm:p-7 animate-pulse flex flex-col justify-between h-[480px] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="h-5 bg-[#F3F4F6] rounded-full w-24"></div>
+                    <div className="flex gap-2">
+                      <div className="w-3 h-3 bg-[#F3F4F6] rounded-full"></div>
+                      <div className="w-4 h-4 bg-[#F3F4F6] rounded"></div>
+                      <div className="w-4 h-4 bg-[#F3F4F6] rounded"></div>
+                    </div>
+                  </div>
+                  <div className="w-full h-48 bg-[#F1F3F5] rounded-2xl mb-5"></div>
+                  <div className="h-6 bg-[#F3F4F6] rounded-lg w-4/5 mb-2"></div>
+                  <div className="h-4 bg-[#F3F4F6] rounded w-1/2 mb-5"></div>
+                </div>
+                <div>
+                  <div className="h-8 bg-[#F3F4F6] rounded-lg w-2/5 mb-4"></div>
+                  <div className="h-12 bg-[#0A21C0]/20 rounded-xl w-full"></div>
+                </div>
+              </div>
             ))}
           </div>
         )}
 
         {/* Empty State */}
-        {!loading && products.length === 0 && (
-          <div className="py-14 px-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+        {!loading && sortedProducts.length === 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-3xl py-16 px-4 text-center shadow-xs">
+            <div className="w-14 h-14 rounded-2xl bg-[#F8F9FA] border border-[#E5E7EB] flex items-center justify-center mx-auto mb-4 text-[#6B7280]">
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
               </svg>
             </div>
-            <h3 className="text-base font-semibold text-zinc-900 mb-1">
+            <h3 className="text-lg font-bold text-[#111827] mb-1.5">
               No products tracked yet
             </h3>
-            <p className="text-sm text-zinc-500 max-w-sm mx-auto mb-4">
-              Use the catalog search above to find products from the INE store and start monitoring their prices and stock.
+            <p className="text-sm text-[#6B7280] max-w-md mx-auto mb-6">
+              Start tracking a product from the catalog above to monitor its price drops, stock availability, and historical trends.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.scrollTo({ top: 120, behavior: 'smooth' });
+                document.querySelector('input[type="text"]')?.focus();
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0A21C0] hover:bg-[#1E3DE6] text-white font-bold text-sm shadow-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <span>Track Your First Product</span>
+            </button>
           </div>
         )}
 
-        {/* Populated Table */}
-        {!loading && products.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="hidden md:table-row bg-zinc-50/70 border-b border-zinc-200/80 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Product</th>
-                  <th className="py-3 px-4">Price</th>
-                  <th className="py-3 px-4">Stock</th>
-                  <th className="py-3 px-4">Last Scraped</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {products.map((product) => (
-                  <TrackedProduct
-                    key={product.id}
-                    product={product}
-                    onRefresh={fetchProducts}
-                  />
-                ))}
-              </tbody>
-            </table>
+        {/* Populated 3-Column Product Grid — Strictly Max 3 Cards Per Row on Desktop */}
+        {!loading && sortedProducts.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedProducts.map((product) => (
+              <TrackedProduct
+                key={product.id}
+                product={product}
+                onRefresh={fetchProducts}
+              />
+            ))}
           </div>
         )}
       </section>
 
-      {/* Recent Alerts Feed */}
-      <section className="mt-8 bg-white border border-zinc-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-200/80 flex items-center justify-between">
+      {/* 4. Dashboard Statistics (Secondary Monitoring) */}
+      <section id="stats-section" className="mb-10">
+        <h3 className="text-sm font-bold text-[#6B7280] uppercase tracking-wider mb-3">
+          Telemetry &amp; Scrape Stats
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">Total Tracked</span>
+            <span className="text-xl font-black text-[#111827] mt-1 block">{loading ? '—' : stats.totalTracked}</span>
+          </div>
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">In Stock</span>
+            <span className="text-xl font-black text-[#16A34A] mt-1 block">{loading ? '—' : stats.inStock}</span>
+          </div>
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">Out of Stock</span>
+            <span className="text-xl font-black text-[#EF4444] mt-1 block">{loading ? '—' : stats.outOfStock}</span>
+          </div>
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">Scrapes Today</span>
+            <span className="text-xl font-black text-[#0A21C0] mt-1 block">{loading ? '—' : stats.scrapesToday}</span>
+          </div>
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">Failed Scrapes</span>
+            <span className="text-xl font-black text-[#F59E0B] mt-1 block">{loading ? '—' : stats.failedScrapes}</span>
+          </div>
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs">
+            <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block">Price Drops</span>
+            <span className="text-xl font-black text-[#EF4444] mt-1 block">{loading ? '—' : stats.priceDrops}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Alerts / Recent Activity */}
+      <section id="alerts-section" className="bg-white border border-[#E5E7EB] rounded-2xl shadow-xs overflow-hidden mb-10">
+        <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-zinc-900">Recent Alerts</h2>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
+            <h2 className="text-base font-bold text-[#111827]">Recent Alerts &amp; Activity</h2>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0A21C0] border border-blue-200">
               {alerts.length}
             </span>
           </div>
-          <span className="text-xs text-zinc-400">Automated price drop & stock notifications</span>
+          <span className="text-xs text-[#6B7280]">Automated price drop &amp; stock notifications</span>
         </div>
 
         {alerts.length === 0 ? (
           <div className="py-8 px-4 text-center">
-            <p className="text-sm text-zinc-500">No alert events recorded yet.</p>
-            <p className="text-xs text-zinc-400 mt-1">Alerts trigger automatically when prices drop or items return to stock.</p>
+            <p className="text-sm text-[#4B5563]">No alert events recorded yet.</p>
+            <p className="text-xs text-[#9CA3AF] mt-1">Alerts trigger automatically when prices drop or items return to stock.</p>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-100">
-            {alerts.slice(0, 8).map((alert) => (
-              <div key={alert.id} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-zinc-50/60 transition-colors">
+          <div className="divide-y divide-[#E5E7EB]">
+            {alerts.slice(0, 5).map((alert) => (
+              <div key={alert.id} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-slate-50/80 transition-colors">
                 <div className="flex items-center gap-3">
-                  <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] ${
+                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-[11px] ${
                     alert.alert_type === 'price_drop'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   }`}>
                     {alert.alert_type === 'price_drop' ? 'Price Drop' : 'Back in Stock'}
                   </span>
-                  <span className="font-semibold text-zinc-900">
+                  <span className="font-bold text-[#111827]">
                     {alert.tracked_products?.product_name || 'Tracked Product'}
                   </span>
-                  <span className="text-zinc-500">
-                    {alert.alert_type === 'price_drop'
-                      ? `₹${alert.previous_price} → ₹${alert.current_price} (-${alert.percentage_change}%)`
-                      : `Now available: ${alert.current_stock || 'In Stock'}`}
+                  <span className="text-[#4B5563]">
+                    {alert.alert_type === 'price_drop' ? (
+                      <>
+                        <span>₹{alert.previous_price} → </span>
+                        <span className="font-bold text-[#16A34A]">₹{alert.current_price}</span>{' '}
+                        <span className="font-bold text-[#EF4444]">(-{alert.percentage_change}%)</span>
+                      </>
+                    ) : (
+                      <>Now available: <span className="font-bold text-emerald-700">{alert.current_stock || 'In Stock'}</span></>
+                    )}
                   </span>
                 </div>
-                <span className="text-zinc-400 font-mono text-[11px] whitespace-nowrap">
+                <span className="text-[#6B7280] font-mono text-[11px] whitespace-nowrap">
                   {new Date(alert.created_at).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>

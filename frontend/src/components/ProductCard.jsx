@@ -1,68 +1,53 @@
-const CATEGORY_STYLES = {
-  Audio: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
-  Laptops: 'bg-blue-50 text-blue-700 border-blue-200/60',
-  Wearables: 'bg-purple-50 text-purple-700 border-purple-200/60',
-  Monitors: 'bg-sky-50 text-sky-700 border-sky-200/60',
-  Peripherals: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
-  Power: 'bg-amber-50 text-amber-700 border-amber-200/60',
-  'Smart Home': 'bg-teal-50 text-teal-700 border-teal-200/60',
-  Bags: 'bg-stone-100 text-stone-700 border-stone-200',
-  Kitchen: 'bg-orange-50 text-orange-700 border-orange-200/60',
-  Footwear: 'bg-zinc-100 text-zinc-700 border-zinc-200',
-};
-
 export default function ProductCard({ product, onTrack, tracking, isTracked }) {
-  const categoryStyle = CATEGORY_STYLES[product.category] || 'bg-zinc-100 text-zinc-700 border-zinc-200';
-
   return (
-    <div className="group bg-white border border-zinc-200 hover:border-zinc-300 rounded-xl p-4 transition-all duration-150 hover:shadow-sm flex flex-col justify-between h-full">
+    <div className="group bg-white border border-[#E5E7EB] hover:border-[#0A21C0]/50 rounded-2xl p-4 transition-all duration-150 hover:shadow-md flex flex-col justify-between h-full shadow-2xs">
       {/* Top Meta */}
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${categoryStyle}`}>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md border bg-[#F8F9FA] text-[#0A21C0] border-[#E5E7EB] uppercase tracking-wider">
             {product.category || 'Product'}
           </span>
-          <span className="text-xs font-medium text-zinc-500 truncate">
+          <span className="text-xs font-semibold text-[#6B7280] truncate">
             {product.brand}
           </span>
         </div>
 
         {/* Product Name */}
         <h4
-          className="text-sm font-semibold text-zinc-900 group-hover:text-zinc-950 line-clamp-2 leading-snug"
+          className="text-sm font-bold text-[#111827] group-hover:text-[#0A21C0] line-clamp-2 leading-snug transition-colors"
           title={product.name}
         >
           {product.name}
         </h4>
 
-        {/* SKU / ID */}
-        <div className="flex items-center gap-2 mt-2 text-[11px] font-mono text-zinc-400">
+        {/* SKU / Slug */}
+        <div className="flex items-center gap-2 mt-2 text-[11px] font-mono text-[#6B7280]">
           <span>{product.sku || `ID: ${product.id}`}</span>
           {product.slug && <span>·</span>}
-          {product.slug && <span className="truncate max-w-[140px] text-zinc-400 font-sans">{product.slug}</span>}
+          {product.slug && <span className="truncate max-w-[140px] text-[#6B7280] font-sans">{product.slug}</span>}
         </div>
       </div>
 
       {/* Footer Actions */}
-      <div className="pt-4 mt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
+      <div className="pt-4 mt-3 border-t border-[#E5E7EB] flex items-center justify-between gap-2">
         {/* Store Link */}
         <a
           href={product.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-[#6B7280] hover:text-[#111827] transition-colors"
           title="Open product on INE mock store"
         >
           <span>Store</span>
-          <svg className="w-3 h-3 text-zinc-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+          <svg className="w-3 h-3 text-[#6B7280]" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
           </svg>
         </a>
 
         {/* Track Button */}
         {isTracked ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+          <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-[#DCFCE7] text-[#15803D] border border-emerald-200 shadow-2xs">
+            <svg className="w-3.5 h-3.5 text-[#15803D]" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
             Tracked
@@ -72,7 +57,7 @@ export default function ProductCard({ product, onTrack, tracking, isTracked }) {
             type="button"
             onClick={onTrack}
             disabled={tracking}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[#0A21C0] hover:bg-[#1E3DE6] text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors focus-visible:outline-none"
           >
             {tracking ? (
               <>
@@ -84,7 +69,7 @@ export default function ProductCard({ product, onTrack, tracking, isTracked }) {
               </>
             ) : (
               <>
-                <svg className="w-3.5 h-3.5 text-zinc-300" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 <span>Track</span>

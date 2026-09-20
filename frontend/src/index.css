@@ -6,9 +6,15 @@
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    background-color: #F8F9FA;
+    color: #111827;
   }
   body {
-    @apply bg-zinc-50 text-zinc-900 font-sans antialiased;
+    background-color: #F8F9FA;
+    color: #111827;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -19,12 +25,12 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #F8F9FA;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: #D1D5DB;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: #9CA3AF;
 }
