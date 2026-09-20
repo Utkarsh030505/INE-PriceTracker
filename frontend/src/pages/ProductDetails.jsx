@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   getProduct,
@@ -120,7 +120,7 @@ export default function ProductDetails() {
   const [updatingFreq, setUpdatingFreq] = useState(false);
   const [freqFeedback, setFreqFeedback] = useState(null);
 
-  async function fetchAll() {
+  const fetchAll = useCallback(async (isBackground = false) => {
     try {
       const [p, h, l, a] = await Promise.all([
         getProduct(id),
@@ -132,21 +132,67 @@ export default function ProductDetails() {
       setHistory(h || []);
       setLogs(l || []);
       setAlerts(a || []);
-      if (p) {
+      if (p && !isBackground) {
         setPriceAlert(p.price_alert_enabled !== false);
         setStockAlert(p.stock_alert_enabled !== false);
         setThresholdPct(p.price_drop_threshold_pct ?? 0);
         setFrequencyMinutes(p.scrape_interval_minutes || 120);
       }
     } catch {
-      setProduct(null);
+      if (!isBackground) {
+        setProduct(null);
+      }
     }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    fetchAll();
+    if (!isBackground) {
+      setLoading(false);
+    }
   }, [id]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchAll(false);
+  }, [fetchAll]);
+
+  // 30-second background polling with tab visibility detection
+  useEffect(() => {
+    let isPolling = false;
+
+    const poll = async () => {
+      if (document.hidden || isPolling) return;
+      isPolling = true;
+      try {
+        await fetchAll(true);
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    const intervalId = setInterval(poll, 30000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        poll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchAll]);
+
+  // Relative timer ticker (updates "2m ago" -> "3m ago" every 60s without network calls)
+  const [, setTimerTick] = useState(0);
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      if (!document.hidden) {
+        setTimerTick((t) => t + 1);
+      }
+    }, 60000);
+    return () => clearInterval(tickInterval);
+  }, []);
 
   async function handleSaveAlertSettings(e) {
     e?.preventDefault();

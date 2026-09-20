@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (isBackground = false) => {
     try {
       const [productsData, statsData, alertsData] = await Promise.all([
         getTrackedProducts(),
@@ -32,18 +32,65 @@ export default function Dashboard() {
         setStats((prev) => ({ ...prev, totalTracked: (productsData || []).length }));
       }
     } catch {
-      setProducts([]);
+      if (!isBackground) {
+        setProducts([]);
+      }
     }
-    setLoading(false);
+    if (!isBackground) {
+      setLoading(false);
+    }
   }, []);
 
+  // Initial fetch on mount
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(false);
   }, [fetchProducts]);
+
+  // Background polling every 30 seconds with tab visibility detection
+  useEffect(() => {
+    let isPolling = false;
+
+    const poll = async () => {
+      if (document.hidden || isPolling) return;
+      isPolling = true;
+      try {
+        await fetchProducts(true);
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    const intervalId = setInterval(poll, 30000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        poll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchProducts]);
+
+  // Relative time ticker: re-renders every 60 seconds so "2m ago" -> "3m ago"
+  // updates automatically without requiring manual page refresh or network requests
+  const [, setTimerTick] = useState(0);
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      if (!document.hidden) {
+        setTimerTick((t) => t + 1);
+      }
+    }, 60000);
+    return () => clearInterval(tickInterval);
+  }, []);
 
   async function handleManualRefresh() {
     setRefreshing(true);
-    await fetchProducts();
+    await fetchProducts(false);
     setTimeout(() => setRefreshing(false), 400);
   }
 
