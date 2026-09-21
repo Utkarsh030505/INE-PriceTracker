@@ -8,17 +8,19 @@ import {
 } from './services/schedulerService.js';
 
 describe('schedulerService - Interval Validation', () => {
-  test('supported intervals include 30, 60, 120, 360, 720, 1440', () => {
-    expect(SUPPORTED_INTERVALS).toEqual([30, 60, 120, 360, 720, 1440]);
-    expect(isValidInterval(30)).toBe(true);
-    expect(isValidInterval(60)).toBe(true);
+  test('supported intervals include 120, 240, 480, 720, 1440', () => {
+    expect(SUPPORTED_INTERVALS).toEqual([120, 240, 480, 720, 1440]);
     expect(isValidInterval(120)).toBe(true);
-    expect(isValidInterval(360)).toBe(true);
+    expect(isValidInterval(240)).toBe(true);
+    expect(isValidInterval(480)).toBe(true);
     expect(isValidInterval(720)).toBe(true);
     expect(isValidInterval(1440)).toBe(true);
   });
 
-  test('rejects unsupported intervals', () => {
+  test('rejects unsupported and legacy intervals (including 30m, 60m, 360m)', () => {
+    expect(isValidInterval(30)).toBe(false);
+    expect(isValidInterval(60)).toBe(false);
+    expect(isValidInterval(360)).toBe(false);
     expect(isValidInterval(5)).toBe(false);
     expect(isValidInterval(15)).toBe(false);
     expect(isValidInterval(45)).toBe(false);
@@ -84,28 +86,23 @@ describe('schedulerService - calculateNextScrapeAt', () => {
     expect(nextScrape).toBe('2026-09-21T12:00:00.000Z');
   });
 
-  test('correctly adds interval minutes for all supported intervals (30, 60, 120, 360, 720, 1440)', () => {
+  test('correctly adds interval minutes for all supported intervals (120, 240, 480, 720, 1440)', () => {
     const base = new Date('2026-09-20T12:00:00.000Z');
-
-    // 30 minutes
-    const next30 = calculateNextScrapeAt(30, base);
-    expect(new Date(next30).toISOString()).toBe('2026-09-20T12:30:00.000Z');
-    expect(new Date(next30).getTime() - base.getTime()).toBe(30 * 60 * 1000);
-
-    // 60 minutes (1 hour)
-    const next60 = calculateNextScrapeAt(60, base);
-    expect(new Date(next60).toISOString()).toBe('2026-09-20T13:00:00.000Z');
-    expect(new Date(next60).getTime() - base.getTime()).toBe(60 * 60 * 1000);
 
     // 120 minutes (2 hours)
     const next120 = calculateNextScrapeAt(120, base);
     expect(new Date(next120).toISOString()).toBe('2026-09-20T14:00:00.000Z');
     expect(new Date(next120).getTime() - base.getTime()).toBe(120 * 60 * 1000);
 
-    // 360 minutes (6 hours)
-    const next360 = calculateNextScrapeAt(360, base);
-    expect(new Date(next360).toISOString()).toBe('2026-09-20T18:00:00.000Z');
-    expect(new Date(next360).getTime() - base.getTime()).toBe(360 * 60 * 1000);
+    // 240 minutes (4 hours)
+    const next240 = calculateNextScrapeAt(240, base);
+    expect(new Date(next240).toISOString()).toBe('2026-09-20T16:00:00.000Z');
+    expect(new Date(next240).getTime() - base.getTime()).toBe(240 * 60 * 1000);
+
+    // 480 minutes (8 hours)
+    const next480 = calculateNextScrapeAt(480, base);
+    expect(new Date(next480).toISOString()).toBe('2026-09-20T20:00:00.000Z');
+    expect(new Date(next480).getTime() - base.getTime()).toBe(480 * 60 * 1000);
 
     // 720 minutes (12 hours)
     const next720 = calculateNextScrapeAt(720, base);
@@ -123,6 +120,12 @@ describe('schedulerService - calculateNextScrapeAt', () => {
     const resultUnsupported = calculateNextScrapeAt(999, base); // Unsupported -> fallback to 120m
     expect(new Date(resultUnsupported).toISOString()).toBe('2026-09-20T14:00:00.000Z');
 
+    const resultRemoved30 = calculateNextScrapeAt(30, base); // 30m removed -> fallback to 120m
+    expect(new Date(resultRemoved30).toISOString()).toBe('2026-09-20T14:00:00.000Z');
+
+    const resultRemoved60 = calculateNextScrapeAt(60, base); // 60m removed -> fallback to 120m
+    expect(new Date(resultRemoved60).toISOString()).toBe('2026-09-20T14:00:00.000Z');
+
     const resultUndefined = calculateNextScrapeAt(undefined, base); // Undefined -> fallback to 120m
     expect(new Date(resultUndefined).toISOString()).toBe('2026-09-20T14:00:00.000Z');
 
@@ -132,10 +135,10 @@ describe('schedulerService - calculateNextScrapeAt', () => {
 
   test('ensures failed scrape still receives a valid future next_scrape_at timestamp', () => {
     const now = new Date('2026-09-20T10:00:00.000Z');
-    const interval = 60; // 1 hour
+    const interval = 240; // 4 hours
     const nextScrape = calculateNextScrapeAt(interval, now);
 
     expect(new Date(nextScrape).getTime()).toBeGreaterThan(now.getTime());
-    expect(new Date(nextScrape).toISOString()).toBe('2026-09-20T11:00:00.000Z');
+    expect(new Date(nextScrape).toISOString()).toBe('2026-09-20T14:00:00.000Z');
   });
 });

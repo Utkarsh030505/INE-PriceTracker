@@ -1,16 +1,15 @@
 /**
  * Scheduler service for configurable per-product scrape frequencies
- * Supported intervals in minutes: 30m, 1h, 2h, 6h, 12h, 24h
+ * Supported intervals in minutes: 2h (120m), 4h (240m), 8h (480m), 12h (720m), 24h (1440m)
  */
 
-export const SUPPORTED_INTERVALS = [30, 60, 120, 360, 720, 1440];
+export const SUPPORTED_INTERVALS = [120, 240, 480, 720, 1440];
 export const DEFAULT_INTERVAL_MINUTES = 120; // 2 hours default
 
 export const INTERVAL_LABELS = {
-  30: 'Every 30 minutes',
-  60: 'Every 1 hour',
   120: 'Every 2 hours',
-  360: 'Every 6 hours',
+  240: 'Every 4 hours',
+  480: 'Every 8 hours',
   720: 'Every 12 hours',
   1440: 'Every 24 hours',
 };

@@ -355,7 +355,7 @@ app.patch('/api/products/:id/frequency', async (req, res) => {
     const interval = Number(scrape_interval_minutes);
     if (!isValidInterval(interval)) {
       return res.status(400).json({
-        error: 'Invalid scrape interval. Supported values: 30, 60, 120, 360, 720, 1440 minutes.',
+        error: 'Invalid scrape interval. Supported values: 120, 240, 480, 720, 1440 minutes.',
       });
     }
 

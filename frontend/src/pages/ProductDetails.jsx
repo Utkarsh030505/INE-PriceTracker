@@ -420,10 +420,9 @@ export default function ProductDetails() {
                 disabled={updatingFreq}
                 className="w-full bg-[#F8F9FA] border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#111827] focus:bg-white focus:outline-none focus:border-[#0A21C0]"
               >
-                <option value={30}>Every 30 minutes</option>
-                <option value={60}>Every 1 hour</option>
                 <option value={120}>Every 2 hours (Default)</option>
-                <option value={360}>Every 6 hours</option>
+                <option value={240}>Every 4 hours</option>
+                <option value={480}>Every 8 hours</option>
                 <option value={720}>Every 12 hours</option>
                 <option value={1440}>Every 24 hours</option>
               </select>
