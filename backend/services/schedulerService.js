@@ -16,6 +16,15 @@ export const INTERVAL_LABELS = {
 };
 
 /**
+ * Scheduling tolerance in milliseconds (2 minutes).
+ * Accounts for cron trigger execution jitter and sequential Playwright scraping duration.
+ * Without this tolerance, a product whose next_scrape_at is just seconds ahead of the cron
+ * trigger time (e.g., due to the previous scrape taking 15-30 seconds) would be deemed not due,
+ * causing it to skip the entire 2-hour cron cycle and resulting in an effective 4-hour scrape interval.
+ */
+export const SCHEDULING_TOLERANCE_MS = 2 * 60 * 1000;
+
+/**
  * Validates whether an interval is one of the supported values
  */
 export function isValidInterval(minutes) {
@@ -26,7 +35,7 @@ export function isValidInterval(minutes) {
 /**
  * Determines whether a product is currently due for scraping
  */
-export function isProductDue(product, now = new Date()) {
+export function isProductDue(product, now = new Date(), toleranceMs = SCHEDULING_TOLERANCE_MS) {
   if (!product) return false;
   // If next_scrape_at is null or not set, it is immediately due
   if (!product.next_scrape_at) return true;
@@ -35,7 +44,7 @@ export function isProductDue(product, now = new Date()) {
   const currentTime = new Date(now).getTime();
 
   if (isNaN(nextTime)) return true;
-  return nextTime <= currentTime;
+  return nextTime <= currentTime + toleranceMs;
 }
 
 /**
